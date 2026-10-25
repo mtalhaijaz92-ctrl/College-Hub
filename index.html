@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>College Hub – Admin Panel</title>
+<title>College Hub</title>
 <meta name="description" content="A simple college management portal: students, teachers, classes, subjects and fees.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -81,6 +81,7 @@ body{display:block}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 .first{background:#fff8e6;border:1px solid #f6d58a;border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:14px;line-height:1.8}
 code{background:#fff;border:1px solid var(--line);border-radius:6px;padding:1px 7px;font-weight:700}
+.about ol{margin:10px 0 0 22px;display:grid;gap:10px}.about li b{color:var(--ink)}.about a{color:inherit;font-weight:700}.about .ft{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);text-align:center;padding-bottom:70px}
 </style>
 </head>
 <body>
@@ -93,6 +94,7 @@ code{background:#fff;border:1px solid var(--line);border-radius:6px;padding:1px 
   <button class="nav" data-v="classes">📚 <span>Classes</span></button>
   <button class="nav" data-v="fees">💳 <span>Fees</span></button>
   <button class="nav" data-v="sal">💰 <span>Salaries</span></button>
+  <button class="nav" data-v="about">ℹ️ <span>About</span></button>
   <small>Connected to your college database.</small>
 </aside>
 <main id="view"></main>
@@ -101,7 +103,7 @@ code{background:#fff;border:1px solid var(--line);border-radius:6px;padding:1px 
 <div class="credit">Created By : <b>Muhammad Talha Ijaz</b></div>
 
 <script>
-const API_URL = 'https://college-hub-sn4f.vercel.app';
+const API_URL='http://localhost:8000'; // after deploying the backend, replace with your live API address
 const $=s=>document.querySelector(s);
 let db=null,tok=sessionStorage.getItem('chtok'),view='dash',F={q:'',c:'',s:''};
 let SAL=null,SM=new Date().toISOString().slice(0,7),ME=sessionStorage.getItem('chme')||'admin';
@@ -134,22 +136,25 @@ async function run(fn,msg,after=render){try{await fn();await reload();after();to
 function logout(){tok=null;db=null;sessionStorage.removeItem('chtok');render()}
 async function start(){
   if(!tok)return render();
-  try{await reload();render()}catch(e){if(!tok)return;if(e.status==403)return pwView(true);$('#side').style.display='none';$('#view').innerHTML=`<div class="empty">${esc(e.message)}<br><button class="btn" style="margin-top:12px" onclick="start()">Try again</button></div>`}
+  try{await reload();const bn=document.querySelector('.brand');if(bn)bn.innerHTML='<i>🎓</i>'+esc(db.college||'College Hub');render()}catch(e){if(!tok)return;if(e.status==403)return pwView(true);$('#side').style.display='none';$('#view').innerHTML=`<div class="empty">${esc(e.message)}<br><button class="btn" style="margin-top:12px" onclick="start()">Try again</button></div>`}
 }
 
-async function loginView(){
+async function loginView(mode='in'){
   $('#side').style.display='none';
   $('#view').innerHTML='<div class="empty">Loading…</div>';
   let st={};try{st=await api('GET','/api/status')}catch(e){toast(e.message)}
-  $('#view').innerHTML=`<div class="card" style="max-width:380px;margin:8vh auto"><h1 style="font-size:28px">College Hub admin</h1><p style="color:var(--muted);margin:6px 0 16px">Sign in to manage students, teachers, salaries and fees.</p>
-  ${st.first_run?`<div class="first"><b>First time here?</b><br>Username: <code>${esc(st.username)}</code> &nbsp; Password: <code>${esc(st.password)}</code><br><small>These are filled in for you. After signing in you must choose your own password, and this box disappears for good.</small></div>`:''}
-  <form id="lf" class="grid" style="gap:12px"><label>Username<input name="u" autocomplete="username" required value="${st.first_run?esc(st.username):''}"></label><label>Password<input name="p" type="password" autocomplete="current-password" required value="${st.first_run?esc(st.password):''}"></label><button class="btn">Sign in</button></form></div>`;
+  const reg=mode=='reg';
+  $('#view').innerHTML=`<div class="card" style="max-width:400px;margin:8vh auto"><h1 style="font-size:28px">College Hub</h1><p style="color:var(--muted);margin:6px 0 16px">${reg?'Register your college or school. You will get your own private login and data.':'Sign in to manage your students, teachers, salaries and fees.'}</p>
+  <form id="lf" class="grid" style="gap:12px">${reg?'<label>College / school name<input name="n" minlength="2" maxlength="80" required></label>':''}<label>Username<input name="u" autocomplete="username" minlength="${reg?3:1}" maxlength="40" required></label><label>Password${reg?' (at least 8 characters)':''}<input name="p" type="password" autocomplete="${reg?'new-password':'current-password'}" minlength="${reg?8:1}" required></label>${reg&&st.code_required?'<label>Signup code<input name="c" required></label>':''}<button class="btn">${reg?'Create account':'Sign in'}</button></form>
+  <p style="margin-top:14px;text-align:center"><a href="#" id="sw" style="color:var(--muted)">${reg?'Already registered? Sign in':'New college or school? Register here'}</a></p></div>`;
+  $('#sw').onclick=e=>{e.preventDefault();loginView(reg?'in':'reg')};
   $('#lf').onsubmit=async e=>{e.preventDefault();const d=new FormData(e.target);
-    try{const r=await api('POST','/api/login',{username:d.get('u'),password:d.get('p')});tok=r.token;ME=r.username;sessionStorage.setItem('chtok',tok);sessionStorage.setItem('chme',ME);r.must_change?pwView(true):await start()}catch(x){toast(x.message)}};
+    try{const r=reg?await api('POST','/api/register',{college:d.get('n'),username:d.get('u'),password:d.get('p'),code:d.get('c')||''}):await api('POST','/api/login',{username:d.get('u'),password:d.get('p')});
+      tok=r.token;ME=r.username;sessionStorage.setItem('chtok',tok);sessionStorage.setItem('chme',ME);r.must_change?pwView(true):await start()}catch(x){toast(x.message)}};
 }
 function pwView(forced){
   $('#side').style.display='none';
-  $('#view').innerHTML=`<div class="card" style="max-width:420px;margin:8vh auto"><h1 style="font-size:26px">${forced?'Set your own password':'Change password'}</h1><p style="color:var(--muted);margin:6px 0 16px">${forced?'You signed in with the default login. Choose your own username and password to continue.':'Update your admin username or password.'}</p>
+  $('#view').innerHTML=`<div class="card" style="max-width:420px;margin:8vh auto"><h1 style="font-size:26px">${forced?'Set your own password':'Change password'}</h1><p style="color:var(--muted);margin:6px 0 16px">${forced?'Please choose your own username and password to continue.':'Update your admin username or password.'}</p>
   <form id="pf" class="grid" style="gap:12px"><label>Current password<input name="c" type="password" autocomplete="current-password" required></label><label>Username<input name="u" minlength="3" maxlength="40" required value="${esc(ME)}"></label><label>New password (at least 8 characters)<input name="p" type="password" minlength="8" autocomplete="new-password" required></label><label>Repeat new password<input name="r" type="password" minlength="8" autocomplete="new-password" required></label>
   <div class="acts">${forced?'<button type="button" class="btn ghost" data-act="out">Log out</button>':`<button type="button" class="btn ghost" data-v="${view}">Cancel</button>`}<button class="btn">Save password</button></div></form></div>`;
   $('#pf').onsubmit=async e=>{e.preventDefault();const d=new FormData(e.target);
@@ -221,11 +226,25 @@ function salForm(tid){
   ask(`${esc(r.name)} – ${SM}`,[{k:'amount',l:'Amount for this month (Rs)',t:'number',a:'min=0 step=500'},{k:'paid',l:'Status',t:'select',b:1,o:[['false','Pending'],['true','Paid']]},{k:'note',l:'Note (optional, e.g. bonus or deduction)',t:'text',opt:1,a:'maxlength=100'}],
     {amount:r.amount,paid:String(r.paid),note:r.note},d=>api('PUT',`/api/salaries/${tid}/${SM}`,d));
 }
+function about(){
+  return `<div class="about">${head('About','Everything you need to know about College Hub')}
+  <div class="card"><h2>What is College Hub?</h2><p style="color:var(--muted);margin-top:8px">College Hub is a simple online panel where a college, school or academy manages its students, teachers, subjects, classes, fees and teacher salaries. Every college signs in with its own username and password and only sees its own data.</p></div>
+  <div class="card" style="margin-top:16px"><h2>How to use it (follow this order)</h2>
+    <ol>
+      <li><b>Add Teachers first.</b> Open <i>Teachers</i> and add every teacher with name, age, gender and salary.</li>
+      <li><b>Then add Subjects.</b> Open <i>Subjects</i> and create each subject, choosing the teacher who teaches it.</li>
+      <li><b>Then create Classes.</b> Open <i>Classes</i>, name the class and tick the subjects that belong to it.</li>
+      <li><b>Finally add Students.</b> Open <i>Students</i>, add each student, pick their class and set the fee.</li>
+      <li><b>Daily work:</b> use <i>Fees</i> to mark fees paid or pending and <i>Salaries</i> to record teacher salaries month by month.</li>
+    </ol></div>
+  <div class="card" style="margin-top:16px"><h2>Created by</h2><p style="margin-top:8px"><b>Muhammad Talha Ijaz</b><br><span style="color:var(--muted)">Email:</span> <a href="mailto:mtalhaijaz997@gmail.com">mtalhaijaz997@gmail.com</a></p></div>
+  <div class="ft">Contact me to create websites like these for your own use and customize them: <a href="mailto:mtalhaijaz997@gmail.com">mtalhaijaz997@gmail.com</a></div></div>`;
+}
 function render(){
   if(!tok||!db)return loginView();
   $('#side').style.display='';
   document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('on',b.dataset.v==view));
-  $('#view').innerHTML={dash,students,teachers,subjects,classes,fees,sal}[view]();
+  $('#view').innerHTML={dash,students,teachers,subjects,classes,fees,sal,about}[view]();
   window.scrollTo(0,0);
 }
 function refreshList(){
