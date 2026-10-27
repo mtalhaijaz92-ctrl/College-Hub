@@ -50,6 +50,11 @@ async def lifespan(_app):
             except pymysql.err.OperationalError as e:
                 if e.args[0] != 1060:  # 1060 = column already exists (normal on every later start)
                     raise
+        try:  # teacher phone number column (new)
+            c.execute("ALTER TABLE teachers_info ADD COLUMN T_phno VARCHAR(15) NOT NULL DEFAULT '' AFTER T_Gender")
+        except pymysql.err.OperationalError as e:
+            if e.args[0] != 1060:  # 1060 = column already exists
+                raise
         c.execute("SELECT COUNT(*) n FROM colleges")
         if c.fetchone()["n"] == 0:
             c.execute("SELECT COUNT(*) n FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='admin_account'")
@@ -213,6 +218,7 @@ class TeacherIn(BaseModel):
     name: str = Field(min_length=1, max_length=25)
     age: int = Field(ge=18, le=80)
     gender: str = Field(pattern=r"(?i)^(male|female|other)$")
+    phone: str = Field(pattern=r"^\d{10,13}$")
     salary: int = Field(ge=0)
 
 
@@ -313,7 +319,7 @@ def all_data(col=Depends(admin)):
             p = s.pop("phno")
             s["phone"] = "0" + str(p) if p else ""
             s["paid"] = bool(s["paid"])
-        c.execute("SELECT T_ID id, T_Name name, T_AGE age, T_Gender gender, salary FROM teachers_info WHERE college_id=%s ORDER BY T_ID", (k,))
+        c.execute("SELECT T_ID id, T_Name name, T_AGE age, T_Gender gender, T_phno phone, salary FROM teachers_info WHERE college_id=%s ORDER BY T_ID", (k,))
         teachers = c.fetchall()
         c.execute("SELECT subject_ID id, T_subject name, T_ID tid FROM subjects WHERE college_id=%s ORDER BY subject_ID", (k,))
         subjects = c.fetchall()
@@ -369,16 +375,16 @@ def delete_student(regno: int, col=Depends(admin)):
 def add_teacher(t: TeacherIn, col=Depends(admin)):
     with db() as c:
         tid = next_id(c, "teachers_info", "T_ID", 10)
-        c.execute("INSERT INTO teachers_info (T_ID,T_Name,T_AGE,T_Gender,salary,college_id) VALUES (%s,%s,%s,%s,%s,%s)",
-                  (tid, t.name, t.age, t.gender.capitalize(), t.salary, col["id"]))
+        c.execute("INSERT INTO teachers_info (T_ID,T_Name,T_AGE,T_Gender,T_phno,salary,college_id) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                  (tid, t.name, t.age, t.gender.capitalize(), t.phone, t.salary, col["id"]))
     return {"id": tid}
 
 
 @app.put("/api/teachers/{tid}")
 def edit_teacher(tid: int, t: TeacherIn, col=Depends(admin)):
     with db() as c:
-        c.execute("UPDATE teachers_info SET T_Name=%s,T_AGE=%s,T_Gender=%s,salary=%s WHERE T_ID=%s AND college_id=%s",
-                  (t.name, t.age, t.gender.capitalize(), t.salary, tid, col["id"]))
+        c.execute("UPDATE teachers_info SET T_Name=%s,T_AGE=%s,T_Gender=%s,T_phno=%s,salary=%s WHERE T_ID=%s AND college_id=%s",
+                  (t.name, t.age, t.gender.capitalize(), t.phone, t.salary, tid, col["id"]))
         found(c, "Teacher")
     return {"ok": True}
 
